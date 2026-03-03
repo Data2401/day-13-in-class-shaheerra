@@ -1,9 +1,22 @@
 ---
 title: "Join Lab"
-author: "Dr. Shoemaker"
+author: "Shaheer Ahmed"
 date: "DATA 2401"
 output: html_document
 ---
+
+
+Load the `"nycflights13"` package.  You'll also need to load `dplyr` or `tidyverse`, if you didn't above.
+
+```{r}
+library(tidyverse)
+#install.packages("nycflights13")
+library(nycflights13)
+my_flights <- flights # store my own version
+my_flights <- na.omit(my_flights) ## this dataset has data on cancelled flights too, 
+                                  ## so we 'll remove those for now
+
+```
 
 
 # Joins and `dplyr` practice
@@ -48,34 +61,46 @@ Questions:
 - Find patients that haven't visited the hospital
 
 ```{r}
+#1
+inner_join(patients, visits)
+
+#2
+left_join(patients, visits)
+
+#3
+left_join(visits, patients)
+
+#4
+left_join(visits, doctors)
+
+#5
+full_join(visits, doctors)
+pat_visit <- full_join(visits, patients)
+healthcare <- full_join(pat_visit, doctors)
+healthcare %>% filter(name == "Bob")
+
+#6
+anti_join(patients, visits)
 
 ```
 
 ## Dataset 2
 
-Load the `"nycflights13"` package.  You'll also need to load `dplyr` or `tidyverse`, if you didn't above.
-
-```{r}
-library(tidyverse)
-#install.packages("nycflights13")
-library(nycflights13)
-my_flights <- flights # store my own version
-my_flights <- na.omit(my_flights) ## this dataset has data on cancelled flights too, 
-                                  ## so we 'll remove those for now
-
-```
 
 
 Create a dataframe of the average arrival delays for each _destination_
 
 ```{r}
-
+delay_by_dest <- my_flights %>% group_by(dest) %>% summarise(avg_arr_delay = mean(arr_delay))
 ```
 
 Then use `left_join()` to join on the "airports" dataframe, which has the airport information.
 
 ```{r}
-
+delay_by_dest %>% 
+  left_join(airports, join_by(dest == faa)) %>% 
+  select(dest, name, avg_arr_delay) %>% 
+  arrange(desc(avg_arr_delay))
 ```
 
 
@@ -84,7 +109,10 @@ Note here: the column names don't match anymore!
 Which airport had the largest average arrival delay?
 
 ```{r}
-
+delay_by_dest %>% 
+  left_join(airports, join_by(dest == faa)) %>% 
+  select(name, avg_arr_delay) %>% 
+  slice_max(avg_arr_delay)
 ```
 
 
@@ -93,16 +121,26 @@ What is the average departure delay for each airline? To answer this with someth
 
 
 ```{r}
+my_flights %>% 
+  group_by(carrier) %>% 
+  summarise(avg_dep_delay = mean(dep_delay)) %>% 
+  left_join(airlines, join_by(carrier)) %>% 
+  select(name, avg_dep_delay) %>% 
+  arrange(desc(avg_dep_delay))
 
+```
 
-````
-
-Which airline had the smallest average departure delay? 
+Which airline had the smallest average departure delay?
 
 
 
 ```{r}
-
+my_flights %>% 
+  group_by(carrier) %>% 
+  summarise(avg_dep_delay = mean(dep_delay)) %>% 
+  left_join(airlines, join_by(carrier)) %>% 
+  select(name, avg_dep_delay) %>% 
+  slice_min(avg_dep_delay)
 
 
 ```
@@ -113,7 +151,13 @@ Question: Which origin–destination pair has the highest average arrival delay?
 
 
 ```{r}
-
+my_flights %>% 
+  left_join(airports, join_by(dest == faa)) %>% 
+  left_join(airports, join_by(origin == faa)) %>% 
+  select(dest_name = name.x, origin_name = name.y, everything()) %>% 
+  group_by(origin_name, dest_name) %>% 
+  summarise(avg_arr_delay = mean(arr_delay), .groups = "drop") %>% 
+  slice_max(avg_arr_delay)
 
 
 ``` 
@@ -122,9 +166,28 @@ Which airline (name) has the highest on-time rate? Are left_join and inner_join 
 
 
 ```{r}
+on_time_by_carrier <- my_flights %>% 
+  mutate(on_time = arr_delay <= 0) %>% 
+  group_by(carrier) %>% 
+  summarise(on_time_rate = mean(on_time), .groups = "drop")
+
+on_time_by_carrier %>% 
+  left_join(airlines, join_by(carrier)) %>% 
+  select(name, on_time_rate) %>% 
+  slice_max(on_time_rate)
 
 
+on_time_by_carrier <- my_flights %>% 
+  mutate(on_time = arr_delay <= 0) %>% 
+  group_by(carrier) %>% 
+  summarise(on_time_rate = mean(on_time), .groups = "drop")
 
+on_time_by_carrier %>% 
+  left_join(airlines, join_by(carrier)) %>% 
+  select(name, on_time_rate) %>% 
+  slice_max(on_time_rate)
+
+# They are the same, because every carrier exists in airlines.
 ```
 
 Plane metadata join: age of aircraft vs. delays
@@ -132,7 +195,16 @@ Among aircraft with at least 50 flights, which tailnumber has the largest averag
 
 
 ```{r}
-
+my_flights %>% 
+  group_by(tailnum) %>% 
+  mutate(n_flights = n()) %>% 
+  filter(n_flights >= 50) %>% 
+  summarise(avg_arr_delay = mean(arr_delay),
+            n_flights = max(n_flights)) %>% 
+  left_join(planes, join_by(tailnum)) %>% 
+  mutate(age = 2013 - year) %>%   # flights data is from 2013
+  select(tailnum, avg_arr_delay, n_flights, manufacturer, model, year, age) %>% 
+  slice_max(avg_arr_delay)
 
 
 ```
@@ -160,6 +232,10 @@ What does anti_join(flights, airports, by = c("dest" = "faa")) tell you? What do
 Perform the two joins below and consider what the results **are**. 
 
 ```{r}
+anti_join(flights, airports, by = c("dest" = "faa"))
+
 
 ```
-
+```{r}
+anti_join(airports, flights, by = c("faa" = "dest"))
+```
